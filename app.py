@@ -4,11 +4,18 @@ import google.generativeai as genai
 # ==========================================
 # 0. API 키 설정 및 Gemini 모델 초기화
 # ==========================================
-GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
+# 깃허브 보안 시스템을 피해 스트림릿 Secrets에서 키를 안전하게 읽어옵니다.
+if "GEMINI_API_KEY" in st.secrets:
+    GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
+else:
+    GOOGLE_API_KEY = "" # 로컬 테스트용 빈값 처리
+
 genai.configure(api_key=GOOGLE_API_KEY)
 
 @st.cache_resource
 def load_gemini_model():
+    if not GOOGLE_API_KEY:
+        return None
     candidate_models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.0-flash"]
     for model_name in candidate_models:
         try:
@@ -34,13 +41,16 @@ st.markdown("""
     .subtitle { font-size: 14px; color: #8A95A5 !important; text-align: center; margin-bottom: 30px; }
     .report-card { background-color: #FFFFFF !important; border-left: 6px solid #27AE60 !important; border-top: 1px solid #E2E8F0 !important; border-right: 1px solid #E2E8F0 !important; border-bottom: 1px solid #E2E8F0 !important; border-radius: 8px !important; padding: 20px !important; margin: 20px 0 !important; }
     .report-card p, .report-card span, .report-card b { color: #1E293B !important; }
-    .ai-bubble { background-color: #F4FBF7 !important; border: 1px dashed #27AE60 !important; padding: 18px !important; border-radius: 10px !important; font-size: 14px !important; line-height: 1.6 !important; margin-top: 15px !important; }
+    
+    /* 🚨 AI 말풍선 글자색 피드백 반영: 배경은 연그린, 글자는 무조건 진한 회색으로 고정 */
+    .ai-bubble { background-color: #F4FBF7 !important; border: 1px dashed #27AE60 !important; padding: 18px !important; border-radius: 10px !important; font-size: 14px !important; line-height: 1.6 !important; margin-top: 15px !important; color: #1E293B !important; }
+    .ai-bubble p, .ai-bubble span, .ai-bubble div, .ai-bubble li { color: #1E293B !important; }
 </style>
 """, unsafe_allow_html=True)
 
 questions = [
     {"id": "q1", "category": "analysis", "q": "Q1. 새로운 아이디어를 자주 떠올리는 편이다.", "reverse": False},
-    {"id": "q2", "category": "analysis", "q": "Q2. 복잡한 문제를 구조적으로 나누어 생각할 수 있다.", "reverse": False},
+    {"id": "q2", "category": "analysis", "q": "Q2. 복잡한 문제를 구조적으로 나누어 생각할 수 " + "있다.", "reverse": False},
     {"id": "q3", "category": "analysis", "q": "Q3. 여러 정보를 비교하고 논리적으로 정리하는 데 익숙하다.", "reverse": False},
     {"id": "q4", "category": "analysis", "q": "Q4. 팀원들의 의견을 조율하고 명확한 방향을 제시할 수 있다.", "reverse": False},
     {"id": "q5", "category": "analysis", "q": "Q5. [역문항] 프로젝트 기획이나 새로운 아이디어를 제안하는 것이 다소 부담스럽다.", "reverse": True},
@@ -100,7 +110,6 @@ elif st.session_state.page == "survey":
     
     options = ["선택 안 함", "전혀 아니다", "아니다", "보통이다", "그렇다", "매우 그렇다"]
     
-    # 🚨 폼 양식 시작: 버튼을 누르기 전까지 아래쪽 파이썬 코드 실행을 완벽히 정지시킵니다.
     with st.form("survey_main_form"):
         responses = {}
         for item in questions:
@@ -115,7 +124,6 @@ elif st.session_state.page == "survey":
             )
             st.markdown("<hr style='margin:10px 0; border:none; border-top:1px solid #F1F5F9;'>", unsafe_allow_html=True)
             
-        # 폼 전용 제출 버튼
         submit_survey = st.form_submit_button("결과 분석하기", use_container_width=True)
         
         if submit_survey:
@@ -131,12 +139,10 @@ elif st.session_state.page == "survey":
                 st.stop()
                 
             elif is_all_one or is_all_five:
-                # 🚨 [완벽 차단 바리케이드] 일렬 마킹 검출 시 폼 내부에서 에러를 띄우고 즉시 앱 셧다운
                 st.error("⚠️ 불성실 응답 패턴 감지: 모든 문항에 동일한 극단적 답변('전혀 아니다' 또는 '매우 그렇다')을 마킹하셨습니다. 정확한 AI 분석이 불가능하므로 결과 화면 진입이 완전히 차단되었습니다. 정상적인 답변으로 수정 후 다시 시도해주세요.")
-                st.stop() # 절대 아래쪽 결과 창 전환 코드로 못 내려가게 제어권을 뺏음
+                st.stop()
                 
             else:
-                # 클린 데이터 검증 완료 시에만 세션에 저장하고 리포트 페이지로 이동
                 score_map = {"전혀 아니다": 1, "아니다": 2, "보통이다": 3, "그렇다": 4, "매우 그렇다": 5}
                 reverse_score_map = {"전혀 아니다": 5, "아니다": 4, "보통이다": 3, "그렇다": 2, "매우 그렇다": 1}
                 category_scores = {"analysis": [], "coding": [], "design": [], "presentation": []}
@@ -151,7 +157,6 @@ elif st.session_state.page == "survey":
                 st.session_state.page = "result"
                 st.rerun()
 
-# --- [화면 4] 정밀 진단 리포트 페이지 ---
 elif st.session_state.page == "result":
     if "category_scores" not in st.session_state:
         st.session_state.page = "survey"
@@ -191,12 +196,18 @@ elif st.session_state.page == "result":
     """, unsafe_allow_html=True)
     
     loading_placeholder = st.empty()
-    loading_placeholder.text("AI 분석 중...")
+    loading_placeholder.text("AI 소견서 분석 중...")
     
     if model is None:
         ai_text = f"사용자의 성향과 의지를 종합 분석하여 최종적으로 [{final_role}] 역할을 부여합니다."
     else:
-        prompt = f"대학생 팀 프로젝트 역할 추천 서비스 결과 요약문 작성. 최종직무: {final_role}"
+        # 🚨 프롬프트 수정: 글자 수를 3줄(약 200자 내외)로 강력히 제한
+        prompt = (
+            f"대학생 팀 프로젝트 성향 진단 결과 소견서 요약문 작성.\n"
+            f"사용자 이름: {user['name']}, 최종 확정 직무: {final_role}.\n"
+            f"요구사항: {final_role} 역할에 어울리는 강점과 격려 메시지를 친근한 어조로 작성해줘.\n"
+            f"⚠️ 중요: 무조건 줄바꿈 포함 딱 3줄 내외로 아주 짧고 핵심만 작성해줘. 설명이 길어지면 절대 안 됨."
+        )
         try:
             response = model.generate_content(prompt)
             ai_text = f"{response.text}"
