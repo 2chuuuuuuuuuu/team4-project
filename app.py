@@ -4,11 +4,10 @@ import google.generativeai as genai
 # ==========================================
 # 0. API 키 설정 및 Gemini 모델 초기화
 # ==========================================
-# 깃허브 보안 시스템을 피해 스트림릿 Secrets에서 키를 안전하게 읽어옵니다.
 if "GEMINI_API_KEY" in st.secrets:
     GOOGLE_API_KEY = st.secrets["GEMINI_API_KEY"]
 else:
-    GOOGLE_API_KEY = "" # 로컬 테스트용 빈값 처리
+    GOOGLE_API_KEY = ""
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
@@ -42,15 +41,15 @@ st.markdown("""
     .report-card { background-color: #FFFFFF !important; border-left: 6px solid #27AE60 !important; border-top: 1px solid #E2E8F0 !important; border-right: 1px solid #E2E8F0 !important; border-bottom: 1px solid #E2E8F0 !important; border-radius: 8px !important; padding: 20px !important; margin: 20px 0 !important; }
     .report-card p, .report-card span, .report-card b { color: #1E293B !important; }
     
-    /* 🚨 AI 말풍선 글자색 피드백 반영: 배경은 연그린, 글자는 무조건 진한 회색으로 고정 */
+    /* AI 말풍선: 흰색 배경 테마에서도 글자가 절대 묻히지 않도록 진한 회색(#1E293B) 강제 적용 */
     .ai-bubble { background-color: #F4FBF7 !important; border: 1px dashed #27AE60 !important; padding: 18px !important; border-radius: 10px !important; font-size: 14px !important; line-height: 1.6 !important; margin-top: 15px !important; color: #1E293B !important; }
-    .ai-bubble p, .ai-bubble span, .ai-bubble div, .ai-bubble li { color: #1E293B !important; }
+    .ai-bubble p, .ai-bubble span, .ai-bubble div, .ai-bubble li, .ai-bubble b { color: #1E293B !important; }
 </style>
 """, unsafe_allow_html=True)
 
 questions = [
     {"id": "q1", "category": "analysis", "q": "Q1. 새로운 아이디어를 자주 떠올리는 편이다.", "reverse": False},
-    {"id": "q2", "category": "analysis", "q": "Q2. 복잡한 문제를 구조적으로 나누어 생각할 수 " + "있다.", "reverse": False},
+    {"id": "q2", "category": "analysis", "q": "Q2. 복잡한 문제를 구조적으로 나누어 생각할 수 있다.", "reverse": False},
     {"id": "q3", "category": "analysis", "q": "Q3. 여러 정보를 비교하고 논리적으로 정리하는 데 익숙하다.", "reverse": False},
     {"id": "q4", "category": "analysis", "q": "Q4. 팀원들의 의견을 조율하고 명확한 방향을 제시할 수 있다.", "reverse": False},
     {"id": "q5", "category": "analysis", "q": "Q5. [역문항] 프로젝트 기획이나 새로운 아이디어를 제안하는 것이 다소 부담스럽다.", "reverse": True},
@@ -196,17 +195,28 @@ elif st.session_state.page == "result":
     """, unsafe_allow_html=True)
     
     loading_placeholder = st.empty()
-    loading_placeholder.text("AI 소견서 분석 중...")
+    loading_placeholder.text("AI 개별 데이터 분석 중...")
     
     if model is None:
         ai_text = f"사용자의 성향과 의지를 종합 분석하여 최종적으로 [{final_role}] 역할을 부여합니다."
     else:
-        # 🚨 프롬프트 수정: 글자 수를 3줄(약 200자 내외)로 강력히 제한
+        # 🚨 핵심 피드백 반영: 고정된 위로 멘트 차단. 실제 계산된 점수 팩트를 던져주는 엄격한 진단서 스타일 프롬프트
         prompt = (
-            f"대학생 팀 프로젝트 성향 진단 결과 소견서 요약문 작성.\n"
-            f"사용자 이름: {user['name']}, 최종 확정 직무: {final_role}.\n"
-            f"요구사항: {final_role} 역할에 어울리는 강점과 격려 메시지를 친근한 어조로 작성해줘.\n"
-            f"⚠️ 중요: 무조건 줄바꿈 포함 딱 3줄 내외로 아주 짧고 핵심만 작성해줘. 설명이 길어지면 절대 안 됨."
+            f"대학생 팀 프로젝트 성향 진단 결과에 대한 팩트 기반 소견서를 작성해라.\n"
+            f"사용자 이름: {user['name']}\n"
+            f"사용자 선호 역할: {user['preferred_role']}\n"
+            f"데이터 분석 추천 역할: {pure_recommended}\n"
+            f"최종 확정 역할: {final_role}\n\n"
+            f"각 부문별 실제 평점 데이터:\n"
+            f"- 기획/분석 성향: {avg_analysis:.1f}점 / 5.0점\n"
+            f"- 개발/기술 성향: {avg_coding:.1f}점 / 5.0점\n"
+            f"- 시각디자인 성향: {avg_design:.1f}점 / 5.0점\n"
+            f"- 발표/커뮤니케이션 성향: {avg_presentation:.1f}점 / 5.0점\n\n"
+            f"작성 규칙:\n"
+            f"1. 반드시 첫 대사에 '{user['name']}님, 상세 평점을 보니까 ~ 성향이 ~점으로 가장 높게 나왔네요!'와 같이 실제 점수 데이터 팩트를 언급하며 시작할 것.\n"
+            f"2. 만약 선호 역할과 분석 추천 역할이 다르다면, 예시처럼 '희망한 {user['preferred_role']} 성향은 ~점으로 낮은 반면, ~ 성향이 훨씬 뛰어나 팀의 성공에 이 직무가 더 도움을 줄 수 있다고 평가된 것입니다'의 뉘앙스로 객관적인 수치 비교를 해 줄 것.\n"
+            f"3. 뜬구름 잡는 성격 칭찬이나 단순 위로가 아니라, '이 역량을 발휘할 때 팀 프로젝트 퀄리티가 올라간다'는 관점에서 실질적인 팀 기여도를 논리적으로 분석해 줄 것.\n"
+            f"4. 가독성을 위해 쓸데없이 문장을 길게 늘이지 말고, 명확한 수치 비교와 결론을 담아 4~5줄 내외의 단호하고 전문적인 톤앤매너로 작성할 것."
         )
         try:
             response = model.generate_content(prompt)
